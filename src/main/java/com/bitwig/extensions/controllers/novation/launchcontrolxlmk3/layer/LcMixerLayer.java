@@ -177,7 +177,7 @@ public class LcMixerLayer extends AbstractMixerLayer {
         final ParameterDisplayBinding send1DisplayBinding =
             new ParameterDisplayBinding(new DisplayId(row1Encoder.getTargetId(), displayControl), track.name(), send1);
         sendLayer.addBinding(send1DisplayBinding);
-        sendLayer.addBinding(new LightSendValueBindings(send1, row1Encoder.getLight()));
+        sendLayer.addBinding(new LightSendValueBindings(send1, row1Encoder.getLight(), track.sendBank(), 0));
         sendLayer.addBinding(new AbsoluteEncoderBinding(send1, row1Encoder));
         
         final LaunchRelativeEncoder relativeRow2Encoder = hwElements.getRelativeEncoder(0, index);

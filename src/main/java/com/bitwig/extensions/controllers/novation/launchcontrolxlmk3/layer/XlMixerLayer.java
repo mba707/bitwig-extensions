@@ -135,12 +135,12 @@ public class XlMixerLayer extends AbstractMixerLayer {
             new ParameterDisplayBinding(new DisplayId(row1Encoder.getTargetId(), displayControl), track.name(), send1);
         mixerLayer.addBinding(send1DisplayBinding);
         mixerLayer.addBinding(new AbsoluteEncoderBinding(send1, row1Encoder));
-        mixerLayer.addBinding(new LightSendValueBindings(send1, row1Encoder.getLight()));
+        mixerLayer.addBinding(new LightSendValueBindings(send1, row1Encoder.getLight(), track.sendBank(), 0));
         
         final ParameterDisplayBinding send2DisplayBinding =
             new ParameterDisplayBinding(new DisplayId(row2Encoder.getTargetId(), displayControl), track.name(), send2);
         mixerLayer.addBinding(send2DisplayBinding);
-        mixerLayer.addBinding(new LightSendValueBindings(send2, row2Encoder.getLight()));
+        mixerLayer.addBinding(new LightSendValueBindings(send2, row2Encoder.getLight(), track.sendBank(), 1));
         mixerLayer.addBinding(new AbsoluteEncoderBinding(send2, hwElements.getAbsoluteEncoder(1, index)));
         
         // fixedPanLabel

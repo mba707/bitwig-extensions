@@ -21,7 +21,7 @@ public class LaunchViewControl {
     private final Track singleTrack;
     
     public LaunchViewControl(final ControllerHost host, final AbstractLaunchControlExtensionDefinition definition) {
-        trackBank = host.createTrackBank(8, definition.isXlVersion() ? 2 : 1, 1);
+        trackBank = host.createTrackBank(8, definition.isXlVersion() ? 6 : 1, 1);
         refSendBank = trackBank.getItemAt(0).sendBank();
         for (int i = 0; i < 8; i++) {
             prepareTrack(trackBank.getItemAt(i));

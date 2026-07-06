@@ -4,7 +4,6 @@ import com.bitwig.extension.controller.api.ControllerHost;
 import com.bitwig.extension.controller.api.CursorTrack;
 import com.bitwig.extension.controller.api.HardwareSlider;
 import com.bitwig.extension.controller.api.Send;
-import com.bitwig.extension.controller.api.SendBank;
 import com.bitwig.extension.controller.api.Track;
 import com.bitwig.extension.controller.api.TrackBank;
 import com.bitwig.extensions.controllers.novation.commonsmk3.ColorLookup;
@@ -28,6 +27,7 @@ import com.bitwig.extensions.controllers.novation.launchcontrolxlmk3.control.Lau
 import com.bitwig.extensions.controllers.novation.launchcontrolxlmk3.control.LaunchRelativeEncoder;
 import com.bitwig.extensions.controllers.novation.launchcontrolxlmk3.display.DisplayControl;
 import com.bitwig.extensions.controllers.novation.launchcontrolxlmk3.display.GradientColor;
+import com.bitwig.extensions.framework.Layer;
 import com.bitwig.extensions.framework.Layers;
 import com.bitwig.extensions.framework.di.Activate;
 import com.bitwig.extensions.framework.di.Component;
@@ -42,6 +42,12 @@ public class XlMixerLayer extends AbstractMixerLayer {
     
     private Row1ButtonMode row1Mode = Row1ButtonMode.SOLO;
     private Row2ButtonMode row2Mode = Row2ButtonMode.SELECT;
+
+    // Send pages: page 1 = sends 1-3 on the three knob rows,
+    // page 2 = sends 4-5 on rows 1-2 with pan on row 3.
+    private final Layer sendPage1Layer;
+    private final Layer sendPage2Layer;
+    private boolean sendPage2Active = false;
     
     private enum Row1ButtonMode {
         SOLO,
@@ -58,7 +64,10 @@ public class XlMixerLayer extends AbstractMixerLayer {
         final LaunchControlMidiProcessor midiProcessor, final ControllerHost host,
         final TransportHandler transportHandler, final ButtonLayers buttonLayers) {
         super(layers, midiProcessor, host, viewControl, hwElements, displayControl, transportHandler, buttonLayers);
-        
+
+        sendPage1Layer = new Layer(layers, "SEND_PAGE_1");
+        sendPage2Layer = new Layer(layers, "SEND_PAGE_2");
+
         final TrackBank trackBank = viewControl.getTrackBank();
         for (int i = 0; i < 8; i++) {
             bindTrack(hwElements, trackBank, i);
@@ -93,29 +102,31 @@ public class XlMixerLayer extends AbstractMixerLayer {
         
         mixerLayer.addBinding(
             new SegmentDisplayBinding("Select Track", cursorTrack.name(), displayControl.getFixedDisplay()));
-        
-        final SendBank refBank = viewControl.getRefSendBank();
-        final Send send1 = refBank.getItemAt(0);
-        final Send send2 = refBank.getItemAt(1);
-        send1.name().markInterested();
-        send2.name().markInterested();
-        refBank.canScrollBackwards().markInterested();
-        refBank.canScrollForwards().markInterested();
-        
-        pageUpButton.bindLight(mixerLayer, () -> refBank.canScrollBackwards().get() ? RgbState.WHITE : RgbState.OFF);
-        pageDownButton.bindLight(mixerLayer, () -> refBank.canScrollForwards().get() ? RgbState.WHITE : RgbState.OFF);
-        pageUpButton.bindRepeatHold(mixerLayer, () -> viewControl.navigateSends(-1));
-        pageDownButton.bindRepeatHold(mixerLayer, () -> viewControl.navigateSends(1));
-        refBank.scrollPosition().addValueObserver(pos -> displayControl.show2LineTemporary(
-            "Sends",
-            "%s - %s".formatted(send1.name().get(), send2.name().get())));
+
+        pageUpButton.bindLight(mixerLayer, () -> sendPage2Active ? RgbState.WHITE : RgbState.OFF);
+        pageDownButton.bindLight(mixerLayer, () -> sendPage2Active ? RgbState.OFF : RgbState.WHITE);
+        pageUpButton.bindPressed(mixerLayer, () -> selectSendPage(false));
+        pageDownButton.bindPressed(mixerLayer, () -> selectSendPage(true));
+    }
+
+    private void selectSendPage(final boolean page2) {
+        if (this.sendPage2Active == page2) {
+            return;
+        }
+        this.sendPage2Active = page2;
+        displayControl.show2LineTemporary("Knob Rows", page2 ? "Send 4/5 | Pan" : "Sends 1 - 3");
+        applySendPage();
+    }
+
+    private void applySendPage() {
+        final boolean mixerActive = mode == BaseMode.MIXER;
+        sendPage1Layer.setIsActive(mixerActive && !sendPage2Active);
+        sendPage2Layer.setIsActive(mixerActive && sendPage2Active);
     }
     
     
     private void bindTrack(final LaunchControlXlHwElements hwElements, final TrackBank trackBank, final int index) {
         final Track track = trackBank.getItemAt(index);
-        final Send send1 = track.sendBank().getItemAt(0);
-        final Send send2 = track.sendBank().getItemAt(1);
         track.color().addValueObserver((r, g, b) -> changeTrackColor(index, ColorLookup.toColor(r, g, b)));
         track.addIsSelectedInMixerObserver(select -> {
             if (select) {
@@ -131,25 +142,25 @@ public class XlMixerLayer extends AbstractMixerLayer {
         final LaunchAbsoluteEncoder row2Encoder = hwElements.getAbsoluteEncoder(1, index);
         final LaunchRelativeEncoder row3Encoder = hwElements.getRelativeEncoder(2, index);
         
-        final ParameterDisplayBinding send1DisplayBinding =
-            new ParameterDisplayBinding(new DisplayId(row1Encoder.getTargetId(), displayControl), track.name(), send1);
-        mixerLayer.addBinding(send1DisplayBinding);
-        mixerLayer.addBinding(new AbsoluteEncoderBinding(send1, row1Encoder));
-        mixerLayer.addBinding(new LightSendValueBindings(send1, row1Encoder.getLight(), track.sendBank(), 0));
-        
-        final ParameterDisplayBinding send2DisplayBinding =
-            new ParameterDisplayBinding(new DisplayId(row2Encoder.getTargetId(), displayControl), track.name(), send2);
-        mixerLayer.addBinding(send2DisplayBinding);
-        mixerLayer.addBinding(new LightSendValueBindings(send2, row2Encoder.getLight(), track.sendBank(), 1));
-        mixerLayer.addBinding(new AbsoluteEncoderBinding(send2, hwElements.getAbsoluteEncoder(1, index)));
-        
+        // Page 1: knob rows 1-3 = sends 1-3
+        bindSendToEncoder(sendPage1Layer, track, 0, row1Encoder);
+        bindSendToEncoder(sendPage1Layer, track, 1, row2Encoder);
+        final Send send3 = track.sendBank().getItemAt(2);
+        sendPage1Layer.addBinding(new ParameterDisplayBinding(
+            new DisplayId(row3Encoder.getTargetId(), displayControl), track.name(), send3));
+        sendPage1Layer.addBinding(new LightSendValueBindings(send3, row3Encoder.getLight(), track.sendBank(), 2));
+        sendPage1Layer.addBinding(new RelativeEncoderBinding(send3, row3Encoder));
+
+        // Page 2: knob rows 1-2 = sends 4-5, row 3 = pan
+        bindSendToEncoder(sendPage2Layer, track, 3, row1Encoder);
+        bindSendToEncoder(sendPage2Layer, track, 4, row2Encoder);
         // fixedPanLabel
         final ParameterDisplayBinding panDisplayBinding =
             new ParameterDisplayBinding(
                 new DisplayId(row3Encoder.getTargetId(), displayControl), track.name(), track.pan());
-        mixerLayer.addBinding(panDisplayBinding);
-        mixerLayer.addBinding(new LightValueBindings(track.pan(), row3Encoder.getLight(), GradientColor.PAN));
-        mixerLayer.addBinding(new RelativeEncoderBinding(track.pan(), row3Encoder));
+        sendPage2Layer.addBinding(panDisplayBinding);
+        sendPage2Layer.addBinding(new LightValueBindings(track.pan(), row3Encoder.getLight(), GradientColor.PAN));
+        sendPage2Layer.addBinding(new RelativeEncoderBinding(track.pan(), row3Encoder));
         
         // fixedVolumeLabel
         final ControlTargetId sliderId = new ControlTargetId(index);
@@ -170,6 +181,15 @@ public class XlMixerLayer extends AbstractMixerLayer {
         row2Button.bindPressed(buttonLayers.getSelectLayer(), () -> selectTrack(track));
         row2Button.bindLight(buttonLayers.getMuteLayer(), () -> muteColor(track));
         row2Button.bindPressed(buttonLayers.getMuteLayer(), () -> track.mute().toggle());
+    }
+
+    private void bindSendToEncoder(final Layer layer, final Track track, final int sendIndex,
+        final LaunchAbsoluteEncoder encoder) {
+        final Send send = track.sendBank().getItemAt(sendIndex);
+        layer.addBinding(new ParameterDisplayBinding(
+            new DisplayId(encoder.getTargetId(), displayControl), track.name(), send));
+        layer.addBinding(new AbsoluteEncoderBinding(send, encoder));
+        layer.addBinding(new LightSendValueBindings(send, encoder.getLight(), track.sendBank(), sendIndex));
     }
     
     private void toggleSoloArmMode() {
@@ -206,6 +226,7 @@ public class XlMixerLayer extends AbstractMixerLayer {
         }
         this.mixerLayer.setIsActive(mode == BaseMode.MIXER);
         this.dawLayer.setIsActive(mode == BaseMode.DAW);
+        applySendPage();
         
         
         applySelectMuteMode();

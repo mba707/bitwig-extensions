@@ -16,7 +16,8 @@ public class LightSendValueBindings extends Binding<Parameter, LaunchLight> {
         GradientColor.WHITE,   // Send 1
         GradientColor.BLUE,    // Send 2
         GradientColor.RED,     // Send 3
-        GradientColor.YELLOW   // Send 4
+        GradientColor.YELLOW,  // Send 4
+        GradientColor.PURPLE   // Send 5
     };
 
     private final int itemIndex;

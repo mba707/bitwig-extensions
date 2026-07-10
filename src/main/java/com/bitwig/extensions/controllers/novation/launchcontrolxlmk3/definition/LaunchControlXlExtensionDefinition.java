@@ -8,7 +8,9 @@ import com.bitwig.extension.controller.api.ControllerHost;
 import com.bitwig.extensions.controllers.novation.launchcontrolxlmk3.LaunchControlMk3Extension;
 
 public class LaunchControlXlExtensionDefinition extends AbstractLaunchControlExtensionDefinition {
-    private static final UUID DRIVER_ID = UUID.fromString("cdee004a-1503-487c-bc13-a8311bf1724b");
+    // Distinct id/name from the bundled extension so Bitwig keeps this fork
+    // selected across restarts instead of resolving back to its own copy.
+    private static final UUID DRIVER_ID = UUID.fromString("6744077d-4819-47b3-b630-a615880d5095");
 
     public LaunchControlXlExtensionDefinition() {
     }
@@ -20,7 +22,7 @@ public class LaunchControlXlExtensionDefinition extends AbstractLaunchControlExt
 
     @Override
     public String getName() {
-        return "Launch Control XL 3";
+        return "Launch Control XL 3 (Colorblind)";
     }
 
     @Override
